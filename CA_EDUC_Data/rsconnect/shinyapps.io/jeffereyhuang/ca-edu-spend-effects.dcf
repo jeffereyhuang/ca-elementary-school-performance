@@ -1,0 +1,12 @@
+name: ca-edu-spend-effects
+title: ca-edu-spend-effects
+username:
+account: jeffereyhuang
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 898449
+bundleId: 2387176
+url: https://jeffereyhuang.shinyapps.io/ca-edu-spend-effects/
+when: 1567668909.31894
+asMultiple: FALSE
+asStatic: FALSE

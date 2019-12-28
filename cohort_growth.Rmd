@@ -1,0 +1,354 @@
+---
+title: "Growth Measures"
+author: "Jeff Huang"
+date: "7/27/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(gt)
+
+growth_data <- read.csv("data/CA_SEDA_long.csv") 
+
+clean_growth <- growth_data %>% 
+  mutate(cohort = year - grade) %>% 
+  select(leaidC, leaname, grade, year, subject, mn_all, cohort, totgyb_all) %>% 
+  rename(total_enroll = totgyb_all)
+
+```
+
+```{r density distribution}
+
+# EDA
+for (i in 3:8) {
+  data = subset(clean_growth, grade == i)
+  print(ggplot(data, aes(mn_all, color = subject)) +
+  geom_density() + 
+  labs(title = paste("Distribution of students in grade", i, sep = " ")) + 
+  scale_x_continuous(name = "Achievement Level",
+                           breaks = 0:15,
+                           limits=c(0, 15)))
+}
+
+```
+
+
+```{r function definition}
+
+# 1 year of data
+
+cohort_3_8 <- clean_growth %>% 
+  select(-year) %>% 
+  filter(cohort == 2007) %>% 
+  filter(grade %in% c(3, 8)) %>% 
+  spread(grade, mn_all) %>% 
+  drop_na(`3`, `8`) %>% 
+  mutate(growth = `8`-`3`) %>% 
+  drop_na(growth) %>% 
+  select(leaidC, leaname, cohort, subject, growth) %>% 
+  spread(subject, growth) %>%
+  group_by(leaidC, leaname) %>% 
+  mutate(combined_38_growth = mean(c(ela, math), na.rm = TRUE))
+
+
+# 4 years of data
+cohort_35_3rd <- clean_growth %>% 
+  select(-year) %>% 
+  filter(cohort %in% c(2006:2010)) %>% 
+  filter(grade %in% 3) %>% 
+  spread(grade, mn_all)
+
+cohort_35_5th <- clean_growth %>% 
+  select(-year, -total_enroll) %>% 
+  filter(cohort %in% c(2006:2010)) %>% 
+  filter(grade %in% 5) %>% 
+  spread(grade, mn_all)
+
+cohort_3_5 <- cohort_35_3rd %>% 
+  left_join(cohort_35_5th, by=c("leaidC", "leaname", "subject", "cohort")) %>% 
+  mutate(growth = `5`-`3`) %>% 
+  drop_na(growth) %>% 
+  select(leaidC, leaname, cohort, subject, growth) %>% 
+  spread(subject, growth) %>%
+  drop_na(ela,math) %>% 
+  group_by(leaidC, leaname) %>% 
+  mutate(ela_avg = mean(ela), math_avg = mean(math)) %>% 
+  mutate(combined_35_growth = mean(c(ela_avg, math_avg), na.rm = TRUE)) %>% 
+  drop_na(combined_35_growth) %>% 
+  ungroup() %>% 
+  group_by(leaidC, leaname, cohort) %>% 
+  mutate(yearly_jump = mean(c(math, ela), na.rm = TRUE)) %>% 
+  ungroup()
+
+  ## total enroll
+cohort_35_3rd <- cohort_35_3rd %>% 
+  group_by(leaidC) %>% 
+  summarize(total_enroll = as.integer(mean(total_enroll))) %>% 
+  ungroup()
+
+cohort_3_5 <- cohort_3_5 %>% 
+  left_join(cohort_35_3rd, by="leaidC") 
+
+
+# one year of data
+cohort_6_8 <- clean_growth %>% 
+  select(-year) %>% 
+  filter(cohort == 2007) %>%
+  filter(grade %in% c(6, 8)) %>% 
+  spread(grade, mn_all) %>% 
+  mutate(growth = `8`-`6`) %>% 
+  drop_na() %>% 
+  select(leaidC, leaname, cohort, subject, growth) %>% 
+  spread(subject, growth) %>%
+  group_by(leaidC, leaname) %>% 
+  mutate(ela = mean(ela), math = mean(math)) %>% 
+  mutate(combined_68_growth = mean(c(ela, math), na.rm = TRUE)) %>% 
+  ungroup()
+
+```
+
+```{r sanity check graphs}
+
+# scatter of english vs math
+ggplot(cohort_3_5) + 
+  geom_point(aes(x=math_avg, y=ela_avg))
+
+ggplot(cohort_6_8) + 
+  geom_point(aes(x=math, y=ela))
+
+ggplot(cohort_3_8) + 
+  geom_point(aes(x=math, y=ela))
+
+# density of district growth
+
+ggplot(cohort_3_5) +
+  geom_density(aes(x=combined_35_growth))
+
+ggplot(cohort_6_8) +
+  geom_density(aes(x=combined_68_growth))
+
+ggplot(cohort_3_8) +
+  geom_density(aes(x=combined_38_growth))
+
+
+# additional cohort analysis
+
+# more data points for ela vs math growth
+ggplot(cohort_3_5) + 
+  geom_point(aes(x=math, y=ela))
+
+ggplot(cohort_3_5) + 
+  geom_density(aes(x=math)) + 
+  geom_density(aes(x=ela))
+
+# prevalence of large spikes 
+
+big_jumps <- cohort_3_5 %>% 
+  mutate(relative_spike = yearly_jump - combined_35_growth)
+
+ggplot(big_jumps) +
+  geom_point(aes(x=combined_35_growth, y=yearly_jump))
+
+ggplot(big_jumps) +
+  geom_density(aes(x=relative_spike))
+
+
+```
+
+
+```{r merge}
+
+district <- read_rds("full.rds") 
+
+# merged_growth_eff <- district %>% 
+#   inner_join(cohort_3_8, by=c("dname" = "leaname")) %>% 
+#   mutate(growth_rank = ntile(combined_38_growth, 100)) %>% 
+#   drop_na(expense_rank)
+merged <- district %>% 
+  inner_join(cohort_3_5, by=c("dname" = "leaname")) %>% 
+  select(-ela,-math,-yearly_jump, -cohort) %>% 
+  distinct()
+
+
+## split data into smaller and larger districts - proxy for urban and rural?
+## high growth areas -- look at 3-5 multiple cohorts, look for growth in later cohorts
+merged_growth_eff <- merged %>% 
+  filter(enrollment > 100 & enrollment < 50000) %>% 
+  mutate(enroll_group = ifelse(enrollment < 6000, 0, 1), avg_class_size = enrollment/teacher, staff_ratio = num_staff/enrollment) %>% 
+  filter(avg_class_size < 40)
+
+large <- merged_growth_eff[merged_growth_eff$enroll_group == 1,]
+small <- merged_growth_eff[merged_growth_eff$enroll_group == 0,]
+
+hist(merged_growth_eff$avg_class_size)
+hist(merged_growth_eff$staff_ratio)
+
+# average salaries where a lot of change vs. not a log of change in salary
+# seems like teacher pay is up a lot on average
+# what about high pay in poor areas -- seems to have negative effects! - disclaimer: post 2008
+
+
+large %>% 
+  filter(avg_salary > 64000 & avg_salary < 76000) %>% 
+  ggplot(aes(x=avg_salary, y=combined_35_growth)) +
+  geom_point(aes(color=free_rate)) +
+  geom_smooth()
+
+
+high_pov_tsalgrowth <- merged_growth_eff %>% 
+  select(combined_35_growth,frpm_rate, enroll_group, avg_class_size, staff_ratio)
+
+
+test <- lm(combined_35_growth ~ avg_class_size, data=high_pov_tsalgrowth)
+summary(test)
+# review multivar regression vs. single
+fit <- lm(combined_35_growth ~ ., data = high_pov_tsalgrowth)
+summary(fit)
+
+
+# *** display ***
+
+merged <- merged %>% 
+  mutate(enroll_group = ifelse(enrollment < 6000, 0, 1), avg_class_size = enrollment/teacher, staff_ratio = num_staff/enrollment) %>% 
+  filter(avg_class_size < 40)
+
+merged %>% 
+  ggplot(aes(x=free_rate, y=combined_35_growth)) +
+  geom_point(aes(color=avg_class_size)) +
+  geom_smooth()
+```
+
+```{r}
+
+# highest growth schools with high poverty rates -- median income -- minority rates -- gender gaps -- enrollment -- teacher salaries, recent increases
+
+## for later, variance between grade, num grades
+
+cohort35_display <- cohort_3_5 %>% 
+  select(-ela,-math,-yearly_jump, -cohort, -leaidC) %>% 
+  distinct() %>% 
+  rename("District" = leaname, "ELA Growth" = ela_avg, "Math Growth" = math_avg, "Average Growth" = combined_35_growth, "Enrollment" = total_enroll) 
+
+highest_growth <- cohort35_display %>%
+  arrange(desc(`Average Growth`))
+
+largest <- cohort35_display %>%
+  arrange(desc(`Enrollment`))
+
+display35 <- cohort35_display %>% 
+  arrange(District)
+
+ 
+gt(highest_growth) %>% 
+  tab_header(
+    title= "Most Effective CA School Districts") %>% 
+  fmt_number(columns = c(2:4),
+             decimals = 1)
+
+gt(largest) %>% 
+  tab_header(
+    title= "Performance of Largest CA School Districts") %>% 
+  fmt_number(columns = c(2:4),
+             decimals = 1)
+
+# maps with toggles
+
+
+write_rds(largest, "CA_EDUC_Data/largest.rds")
+write_rds(highest_growth, "CA_EDUC_Data/highest_growth.rds")
+write_rds(display35, "CA_EDUC_Data/display35.rds")
+```
+
+
+```{r}
+## determine most deterministic factors
+
+reg_data <- merged_growth_eff %>% 
+  filter(enrollment<10000) %>% 
+  select(-leaidC, -cohort, -district_code, -growth_rank)
+
+fit <- lm(combined_38_growth ~ . -dname, data = reg_data)
+summary(fit)
+coefficients(fit)
+vcov(fit)
+residuals(fit) # residuals
+anova(fit) # anova table 
+vcov(fit) # covariance matrix for model parameters 
+influence(fit)
+
+
+
+# graphs
+
+merged_growth_eff %>% 
+  filter(d_spend < 250000) %>% 
+  ggplot(aes(x=d_spend,y=combined_38_growth)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+
+merged_growth_eff %>% 
+  filter(d_spend < 250000) %>%
+  ggplot(aes(x=comp_rank,y=combined_38_growth)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+
+merged_growth_eff %>% 
+  filter(d_spend < 250000) %>% 
+  ggplot(aes(x=d_spend,y=combined_38_growth)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+  
+  
+```
+
+```{r}
+merged_growth_eff %>% 
+  filter(enrollment>10000) %>% 
+  # growth > 50 percentile
+  # filter(combined_38_growth > 5) %>%
+  ggplot(aes(x=combined_38_growth,y=sat_comp_rank)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+
+merged_growth_eff %>% 
+  # # growth > 50 percentile
+  # filter(combined_38_growth > 5) %>%
+  ggplot(aes(x=combined_38_growth,y=sat_part_rank)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+
+
+merged_growth_eff %>% 
+  # growth > 50 percentile
+  # filter(combined_38_growth > 5) %>%
+  ggplot(aes(x=combined_38_growth,y=act_comp_rank)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+
+merged_growth_eff %>% 
+  # # growth > 50 percentile
+  # filter(combined_38_growth > 5) %>%
+  ggplot(aes(x=combined_38_growth,y=act_part_rank)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+
+merged_growth_eff %>% 
+  # growth > 50 percentile
+  # filter(combined_38_growth > 5) %>%
+  ggplot(aes(x=combined_38_growth,y=ap_score_rank)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+
+merged_growth_eff %>% 
+  # growth > 50 percentile
+  # filter(combined_38_growth > 5) %>%
+  ggplot(aes(x=combined_38_growth,y=ap_part_rank)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = lm)
+
+```
+

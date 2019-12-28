@@ -1,0 +1,12 @@
+name: CA_EDUC_Data
+title: CA_EDUC_Data
+username:
+account: jeffereyhuang
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 895268
+bundleId: 2043933
+url: https://jeffereyhuang.shinyapps.io/CA_EDUC_Data/
+when: 1556412216.26222
+asMultiple: FALSE
+asStatic: FALSE

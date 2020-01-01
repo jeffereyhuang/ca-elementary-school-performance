@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggplot2)
 library(gt)
+library(sf)
+library(readxl)
 
 growth_data <- read.csv("data/CA_SEDA_long.csv") 
 
@@ -18,6 +20,10 @@ clean_growth <- growth_data %>%
   mutate(cohort = year - grade) %>% 
   select(leaidC, leaname, grade, year, subject, mn_all, cohort, totgyb_all) %>% 
   rename(total_enroll = totgyb_all)
+
+geocodes <- read_xlsx("geocodes.xlsx")
+
+shapes_data <- read_sf("SEDA_shapefiles/2013_Unified_Elementary_SD.shp")
 
 ```
 
@@ -224,13 +230,34 @@ merged %>%
 
 ```{r}
 
-# highest growth schools with high poverty rates -- median income -- minority rates -- gender gaps -- enrollment -- teacher salaries, recent increases
+# highest growth schools with high poverty rates -- median income -- minority rates -- gender gaps -- teacher salaries, recent increases
 
-## for later, variance between grade, num grades
+# map of schools
+
+geocodes <- geocodes %>% 
+  select(LEAID, LAT, LON) %>% 
+  mutate(LEAID = as.integer(LEAID))
+
+cohort_3_5 <- cohort_3_5 %>% 
+  left_join(geocodes, by= c("leaidC" = "LEAID"))
+
+# select single school
+# frpm (exists in data)
+# teacher salary (exists in data) 
+# median income (have to get data, feel free to skip)
+# smaller minority gaps (exists in data)
+# salary increases (can we look at cohorts right after teachers were given raises?)
+
+# variance between cohorts
+# regression
+
+
+cohort_3_5 <- cohort_3_5 %>% 
+  select(-ela,-math,-yearly_jump, -cohort, -leaidC) %>% 
+  distinct() 
 
 cohort35_display <- cohort_3_5 %>% 
-  select(-ela,-math,-yearly_jump, -cohort, -leaidC) %>% 
-  distinct() %>% 
+  select(-LAT,-LON) %>% 
   rename("District" = leaname, "ELA Growth" = ela_avg, "Math Growth" = math_avg, "Average Growth" = combined_35_growth, "Enrollment" = total_enroll) 
 
 highest_growth <- cohort35_display %>%
@@ -303,6 +330,19 @@ merged_growth_eff %>%
   geom_smooth(method = lm)
   
   
+```
+
+```{r}
+
+
+cohort_sf <- st_as_sf(cohort_3_5, coords = c("LON","LAT"), crs = 4326)
+
+# plot data
+ggplot(data = shapes_data) +
+  # geom_sf(), two are necessary
+  geom_sf() +
+  geom_sf(data = cohort_sf)
+  theme_map() 
 ```
 
 ```{r}

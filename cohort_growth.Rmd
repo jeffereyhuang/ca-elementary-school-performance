@@ -23,7 +23,8 @@ clean_growth <- growth_data %>%
 
 geocodes <- read_xlsx("geocodes.xlsx")
 
-shapes_data <- read_sf("SEDA_shapefiles/2013_Unified_Elementary_SD.shp")
+# shapes_data <- read_sf("SEDA_shapefiles/2013_Unified_Elementary_SD.shp")
+shapes_data <- read_sf("SEDA_CAshapefiles/shapefiles.shp")
 
 ```
 
@@ -334,14 +335,19 @@ merged_growth_eff %>%
 
 ```{r}
 
-
+cohort_3_5 <- cohort_3_5 %>% 
+  drop_na(LAT, LON)
+  
 cohort_sf <- st_as_sf(cohort_3_5, coords = c("LON","LAT"), crs = 4326)
+
+shapes_data <- shapes_data %>% 
+  filter(STATEFP == "06")
 
 # plot data
 ggplot(data = shapes_data) +
   # geom_sf(), two are necessary
   geom_sf() +
-  geom_sf(data = cohort_sf)
+  geom_sf(data = cohort_sf) +
   theme_map() 
 ```
 

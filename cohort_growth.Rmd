@@ -21,10 +21,10 @@ clean_growth <- growth_data %>%
   select(leaidC, leaname, grade, year, subject, mn_all, cohort, totgyb_all) %>% 
   rename(total_enroll = totgyb_all)
 
-geocodes <- read_xlsx("geocodes.xlsx")
+# geocodes <- read_xlsx("geocodes.xlsx")
 
-# shapes_data <- read_sf("SEDA_shapefiles/2013_Unified_Elementary_SD.shp")
-shapes_data <- read_sf("SEDA_CAshapefiles/shapefiles.shp")
+shapes_data <- read_sf("SEDA_shapefiles/2013_Unified_Elementary_SD.shp")
+# shapes_data <- read_sf("SEDA_CAshapefiles/shapefiles.shp")
 
 ```
 
@@ -103,7 +103,7 @@ cohort_3_5 <- cohort_3_5 %>%
 
 # one year of data
 cohort_6_8 <- clean_growth %>% 
-  select(-year) %>% 
+  select(-year) %>%  
   filter(cohort == 2007) %>%
   filter(grade %in% c(6, 8)) %>% 
   spread(grade, mn_all) %>% 
@@ -235,12 +235,12 @@ merged %>%
 
 # map of schools
 
-geocodes <- geocodes %>% 
-  select(LEAID, LAT, LON) %>% 
-  mutate(LEAID = as.integer(LEAID))
-
-cohort_3_5 <- cohort_3_5 %>% 
-  left_join(geocodes, by= c("leaidC" = "LEAID"))
+# geocodes <- geocodes %>% 
+#   select(LEAID, LAT, LON) %>% 
+#   mutate(LEAID = as.integer(LEAID))
+# 
+# cohort_3_5 <- cohort_3_5 %>% 
+#   left_join(geocodes, by= c("leaidC" = "LEAID"))
 
 # select single school
 # frpm (exists in data)
@@ -254,12 +254,12 @@ cohort_3_5 <- cohort_3_5 %>%
 
 
 cohort_3_5 <- cohort_3_5 %>% 
-  select(-ela,-math,-yearly_jump, -cohort, -leaidC) %>% 
+  select(-ela,-math,-yearly_jump, -cohort) %>% 
   distinct() 
 
 cohort35_display <- cohort_3_5 %>% 
-  select(-LAT,-LON) %>% 
-  rename("District" = leaname, "ELA Growth" = ela_avg, "Math Growth" = math_avg, "Average Growth" = combined_35_growth, "Enrollment" = total_enroll) 
+  select(-leaidC) %>% 
+  rename("District" = leaname, "ELA Growth" = ela_avg, "Math Growth" = math_avg, "Average Growth" = combined_35_growth, "Enrollment" = total_enroll)
 
 highest_growth <- cohort35_display %>%
   arrange(desc(`Average Growth`))
@@ -334,20 +334,22 @@ merged_growth_eff %>%
 ```
 
 ```{r}
-
-cohort_3_5 <- cohort_3_5 %>% 
-  drop_na(LAT, LON)
-  
-cohort_sf <- st_as_sf(cohort_3_5, coords = c("LON","LAT"), crs = 4326)
+# 
+# cohort_3_5 <- cohort_3_5 %>% 
+#   drop_na(LAT, LON)
+#   
+# cohort_sf <- st_as_sf(cohort_3_5, coords = c("LON","LAT"), crs = 4326)
 
 shapes_data <- shapes_data %>% 
-  filter(STATEFP == "06")
+  filter(STATEFP == "06") %>% 
+  mutate(GEOID = as.integer(GEOID)) %>% 
+  left_join(cohort_3_5, by=c("GEOID" = "leaidC")) %>% 
+  drop_na(combined_35_growth, ela_avg, math_avg, leaname)
 
 # plot data
 ggplot(data = shapes_data) +
   # geom_sf(), two are necessary
-  geom_sf() +
-  geom_sf(data = cohort_sf) +
+  geom_sf(aes(fill=combined_35_growth)) +
   theme_map() 
 ```
 
